@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "module": "esnext",
+    "removeComments": true,
+    "strict": true,
+    "sourceMap": true,
+    "noImplicitAny": true,
+    "target": "esnext",
+    "lib": ["esnext"],
+    "jsx": "react",
+    "esModuleInterop": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
+  },
+  "include": ["src"],
+  "exclude": [
+    "node_modules",
+    "lib"
+  ]
+}
