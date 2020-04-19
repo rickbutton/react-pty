@@ -1,32 +1,33 @@
-export interface Span {
-    value: string;
+type Color = string | number | undefined;
 
-    color: string | number | undefined;
-    bgColor: string | number | undefined;
-
-    bold: boolean;
-    dim: boolean;
-    italic: boolean;
-    underline: boolean;
-    blink: boolean;
-    inverse: boolean;
-    strike: boolean;
+interface GenericSpan<T extends string, V> {
+    type: T;
+    value: V;
 }
+type ValueSpan = GenericSpan<"value", string>;
+type ResetSpan = GenericSpan<"reset", undefined>;
+type ColorSpan = GenericSpan<"color", Color>;
+type BgColorSpan = GenericSpan<"bgColor", Color>;
+type BoldSpan = GenericSpan<"bold", boolean>;
+type DimSpan = GenericSpan<"dim", boolean>;
+type ItalicSpan = GenericSpan<"italic", boolean>;
+type UnderlineSpan = GenericSpan<"underline", boolean>;
+type BlinkSpan = GenericSpan<"blink", boolean>;
+type InverseSpan = GenericSpan<"inverse", boolean>;
+type StrikeSpan = GenericSpan<"strike", boolean>;
 
-function createSpan(last?: Span): Span {
-    return {
-        value: "",
-        color: last ? last.color : undefined,
-        bgColor: last ? last.bgColor : undefined,
-        bold: last ? last.bold : false,
-        dim: last ? last.dim : false,
-        italic: last ? last.italic : false,
-        underline: last ? last.underline : false,
-        blink: last ? last.blink : false,
-        inverse: last ? last.inverse : false,
-        strike: last ? last.strike : false,
-    };
-}
+export type Span =
+    | ValueSpan
+    | ResetSpan
+    | ColorSpan
+    | BgColorSpan
+    | BoldSpan
+    | DimSpan
+    | ItalicSpan
+    | UnderlineSpan
+    | BlinkSpan
+    | InverseSpan
+    | StrikeSpan;
 
 function isWhiteSpace(c: string): boolean {
     if (c === "\r") return false;
@@ -34,57 +35,50 @@ function isWhiteSpace(c: string): boolean {
     return /^\s$/.test(c);
 }
 
+const COLORS = [
+    "black",
+    "red",
+    "green",
+    "yellow",
+    "blue",
+    "magenta",
+    "cyan",
+    "white",
+];
 function getColorName(code: number): string {
-    const colors = [
-        "black",
-        "red",
-        "green",
-        "yellow",
-        "blue",
-        "magenta",
-        "cyan",
-        "white",
-    ];
-
     if ((code >= 30 && code <= 37) || (code >= 40 && code <= 47)) {
-        return colors[code % 10];
+        return COLORS[code % 10];
     } else if ((code >= 90 && code <= 97) || (code >= 100 && code <= 107)) {
-        const color = colors[code % 10];
+        const color = COLORS[code % 10];
         return "bright" + color[1].toUpperCase() + color.substring(1);
     }
     throw new Error(`invalid color code: ${code}`);
+}
+function getColorCode(color: string, bg: boolean): number {
+    const index = COLORS.indexOf(color);
+
+    if (index >= 0) {
+        return index + (bg ? 40 : 30);
+    } else {
+        throw new Error(`invalid color name ${color}`);
+    }
 }
 
 type CodeState = "sgr" | "fgprefix" | "fg" | "bgprefix" | "bg";
 type EscapeState = "text" | "bracket" | "code";
 const ESCAPE = "\u001b";
 export function parseAnsi(str: string, splitOnWord: boolean): Span[] {
-    let span = createSpan();
-    const spans: Span[] = [span];
+    const spans: Span[] = [];
     let escapeState: EscapeState = "text";
 
     let codeState: CodeState = "sgr";
     let code = "";
-
-    function nextSpan(): void {
-        if (span.value.length > 0) {
-            span = createSpan(span);
-            spans.push(span);
-        }
-    }
-
-    function reset(): void {
-        span.color = undefined;
-        span.bgColor = undefined;
-        span.bold = span.dim = span.italic = span.underline = false;
-        span.blink = span.inverse = span.strike = false;
-    }
+    let value = "";
 
     function applyCode(): void {
-        nextSpan();
-
         if (code.length === 0) {
-            reset();
+            spans.push({ type: "reset", value: undefined });
+            return;
         }
 
         const n = Number(code);
@@ -92,46 +86,46 @@ export function parseAnsi(str: string, splitOnWord: boolean): Span[] {
         switch (codeState) {
             case "sgr":
                 if (n === 0) {
-                    reset();
+                    spans.push({ type: "reset", value: undefined });
                 } else if (n === 1) {
-                    span.bold = true;
+                    spans.push({ type: "bold", value: true });
                 } else if (n === 2) {
-                    span.dim = true;
+                    spans.push({ type: "dim", value: true });
                 } else if (n === 3) {
-                    span.italic = true;
+                    spans.push({ type: "italic", value: true });
                 } else if (n === 4) {
-                    span.underline = true;
+                    spans.push({ type: "underline", value: true });
                 } else if (n === 5 || n === 6) {
-                    span.blink = true;
+                    spans.push({ type: "blink", value: true });
                 } else if (n === 7) {
-                    span.inverse = true;
+                    spans.push({ type: "inverse", value: true });
                 } else if (n === 9) {
-                    span.strike = true;
+                    spans.push({ type: "strike", value: true });
                 } else if (n === 22) {
-                    span.bold = false;
-                    span.dim = false;
+                    spans.push({ type: "bold", value: false });
+                    spans.push({ type: "dim", value: false });
                 } else if (n === 23) {
-                    span.italic = false;
+                    spans.push({ type: "italic", value: false });
                 } else if (n === 24) {
-                    span.underline = false;
+                    spans.push({ type: "underline", value: false });
                 } else if (n === 25) {
-                    span.blink = false;
+                    spans.push({ type: "blink", value: false });
                 } else if (n === 27) {
-                    span.inverse = false;
+                    spans.push({ type: "inverse", value: false });
                 } else if (n === 29) {
-                    span.strike = false;
+                    spans.push({ type: "strike", value: false });
                 } else if ((n >= 30 && n <= 37) || (n >= 90 && n <= 97)) {
-                    span.color = getColorName(n);
+                    spans.push({ type: "color", value: getColorName(n) });
                 } else if (n === 38) {
                     codeState = "fgprefix";
                 } else if (n === 39) {
-                    span.color = undefined;
+                    spans.push({ type: "color", value: undefined });
                 } else if ((n >= 40 && n <= 47) || (n >= 100 && n <= 107)) {
-                    span.bgColor = getColorName(n);
+                    spans.push({ type: "bgColor", value: getColorName(n) });
                 } else if (n === 48) {
                     codeState = "bgprefix";
                 } else if (n === 49) {
-                    span.bgColor = undefined;
+                    spans.push({ type: "bgColor", value: undefined });
                 }
                 break;
             case "fgprefix":
@@ -142,7 +136,7 @@ export function parseAnsi(str: string, splitOnWord: boolean): Span[] {
                 }
                 break;
             case "fg":
-                span.color = n;
+                spans.push({ type: "color", value: n });
                 break;
             case "bgprefix":
                 if (n === 5) {
@@ -152,10 +146,17 @@ export function parseAnsi(str: string, splitOnWord: boolean): Span[] {
                 }
                 break;
             case "bg":
-                span.bgColor = n;
+                spans.push({ type: "bgColor", value: n });
                 break;
         }
         code = "";
+    }
+
+    function applyValue(): void {
+        if (value.length > 0) {
+            spans.push({ type: "value", value });
+            value = "";
+        }
     }
 
     let whitespace = false;
@@ -163,16 +164,17 @@ export function parseAnsi(str: string, splitOnWord: boolean): Span[] {
         switch (escapeState) {
             case "text":
                 if (c === ESCAPE) {
+                    applyValue();
                     escapeState = "bracket";
                 } else if (splitOnWord && isWhiteSpace(c)) {
-                    span.value += c;
+                    value += c;
                     whitespace = true;
                 } else if (splitOnWord && !isWhiteSpace(c) && whitespace) {
                     whitespace = false;
-                    nextSpan();
-                    span.value += c;
+                    applyValue();
+                    value += c;
                 } else {
-                    span.value += c;
+                    value += c;
                 }
                 break;
             case "bracket":
@@ -193,5 +195,82 @@ export function parseAnsi(str: string, splitOnWord: boolean): Span[] {
                 }
         }
     }
+
+    if (code.length > 0) {
+        applyCode();
+    }
+
+    applyValue();
+
     return spans;
+}
+
+export function emitAnsi(spans: Span[]): string[] {
+    const values: string[] = [];
+    // start with reset code
+    let currentCodes: number[] = [0];
+
+    function emitValue(v: string): void {
+        if (currentCodes.length > 0) {
+            values.push("\u001b[" + currentCodes.join(";") + "m" + v);
+            currentCodes = [];
+        } else {
+            values.push(v);
+        }
+    }
+
+    function emitCode(code: number): void {
+        currentCodes.push(code);
+    }
+
+    function emitColor(color: Color, bg: boolean): void {
+        if (typeof color === "string") {
+            const code = getColorCode(color, bg);
+            currentCodes.push(code);
+        } else if (typeof color === "number") {
+            throw new Error("number colors are not implemented");
+        } else {
+            currentCodes.push(bg ? 49 : 39);
+        }
+    }
+
+    for (const span of spans) {
+        switch (span.type) {
+            case "value":
+                emitValue(span.value);
+                break;
+            case "reset":
+                emitCode(0);
+                break;
+            case "color":
+                emitColor(span.value, false);
+                break;
+            case "bgColor":
+                emitColor(span.value, true);
+                break;
+            case "bold":
+                emitCode(span.value ? 1 : 22);
+                break;
+            case "dim":
+                emitCode(span.value ? 2 : 22);
+                break;
+            case "italic":
+                emitCode(span.value ? 3 : 23);
+                break;
+            case "underline":
+                emitCode(span.value ? 4 : 24);
+                break;
+            case "blink":
+                emitCode(span.value ? 5 : 25);
+                break;
+            case "inverse":
+                emitCode(span.value ? 7 : 27);
+                break;
+            case "strike":
+                emitCode(span.value ? 9 : 29);
+                break;
+        }
+    }
+
+    return values;
 }
